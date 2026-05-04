@@ -1,22 +1,7 @@
 plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+    id("org.jetbrains.kotlin.toolchains.foojay-resolver-convention") version "0.10.0"
 }
 rootProject.name = "CloudstreamPlugins"
 
-// This file sets what projects are included.
-// All new projects should get automatically included unless specified in the "disabled" variable.
-
-val disabled = listOf<String>()
-
-File(rootDir, ".").eachDir { dir ->
-    if (!disabled.contains(dir.name) && File(dir, "build.gradle.kts").exists()) {
-        include(dir.name)
-    }
-}
-
-fun File.eachDir(block: (File) -> Unit) {
-    listFiles()?.filter { it.isDirectory }?.forEach { block(it) }
-}
-
-// To only include a single project, comment out the previous lines (except the first one), and include your plugin like so:
-// include("PluginName")
+// سنقوم فقط بتضمين الإضافة الخاصة بك لتسريع البناء وتجنب أخطاء الإضافات الأخرى
+include(":OnepornProvider")
