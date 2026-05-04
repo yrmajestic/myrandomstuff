@@ -1,8 +1,0 @@
-{
-    "name": "1porn Repository",
-    "description": "Custom extensions for Cloudstream",
-    "manifestVersion": 1,
-    "pluginLists": [
-      "https://raw.githubusercontent.com/yrmajestic/myrandomstuff/builds/plugins.json"
-    ]
-}
