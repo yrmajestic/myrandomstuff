@@ -1,7 +1,7 @@
 plugins {
-    id("org.jetbrains.kotlin.toolchains.foojay-resolver-convention") version "0.10.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 rootProject.name = "CloudstreamPlugins"
 
-// سنقوم فقط بتضمين الإضافة الخاصة بك لتسريع البناء وتجنب أخطاء الإضافات الأخرى
+// تضمين فقط الإضافة الخاصة بك لضمان سرعة ونجاح البناء
 include(":OnepornProvider")
