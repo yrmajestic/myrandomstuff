@@ -2,7 +2,6 @@ package recloudstream
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.utils.AppUtils.apmap
 import org.jsoup.nodes.Element
 
 class OnePorn : MainAPI() {
@@ -19,7 +18,7 @@ class OnePorn : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val sections = mutableListOf(
+        val sections = listOf(
             Triple("Latest Updates", "$mainUrl/latest-updates/", "latest"),
             Triple("Top Rated", "$mainUrl/top-rated/", "top"),
             Triple("Most Popular", "$mainUrl/most-popular/", "popular"),
@@ -34,8 +33,7 @@ class OnePorn : MainAPI() {
             Triple("Naughty America", "$mainUrl/networks/naughtyamerica-com/", "network")
         )
 
-        // استخدام التحميل المتوازي لتحسين الأداء
-        val homePageList = sections.map { (name, url, _) ->
+        val homePageList = sections.mapNotNull { (name, url, _) ->
             val pageUrl = if (page <= 1) url else "${url.trimEnd('/')}/$page/"
             try {
                 val response = app.get(pageUrl, headers = headers).document
@@ -46,12 +44,11 @@ class OnePorn : MainAPI() {
             } catch (e: Exception) {
                 null
             }
-        }.filterNotNull()
+        }
 
         return newHomePageResponse(homePageList)
     }
 
-    // تحديث البحث ليدعم الصفحات المتعددة
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/search/${query.replace(" ", "+")}/relevance/"
         val doc = app.get(searchUrl, headers = headers).document
@@ -86,7 +83,6 @@ class OnePorn : MainAPI() {
         
         val tags = doc.select("div.video-info-item a[href*='/categories/'], .tags a, .categories a, .video-tags a").map { it.text() }
         
-        // جلب الفيديوهات المشابهة (Recommendations)
         val recommendations = doc.select("div.item, div.video-item, article.item").mapNotNull {
             it.toSearchResult()
         }
@@ -108,21 +104,17 @@ class OnePorn : MainAPI() {
         val response = app.get(data, headers = headers)
         val html = response.text
 
-        // Regex محسّن لاستخراج كل روابط ahcdn المحتملة بكل الجودات
-        val mp4Regex = """https?://[^"\s]+ahcdn\.com[^"\s]*_(\d+p|m)\.mp4[^"\s]*""".toRegex()
+        // Regex لاستخراج الروابط بكل الجودات
         val generalMp4Regex = """https?://[^"\s]+ahcdn\.com[^"\s]*\.mp4[^"\s]*""".toRegex()
-
         val foundLinks = mutableSetOf<String>()
 
-        // البحث عن الروابط في الكود المصدري
-        (mp4Regex.findAll(html) + generalMp4Regex.findAll(html)).forEach { match ->
+        generalMp4Regex.findAll(html).forEach { match ->
             val link = match.value
             if (foundLinks.add(link)) {
                 val quality = when {
                     link.contains("2160") || link.contains("4k") -> 2160
                     link.contains("1080") -> 1080
                     link.contains("720") -> 720
-                    link.contains("480") -> 480
                     else -> 480
                 }
                 callback(
