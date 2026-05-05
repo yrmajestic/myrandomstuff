@@ -14,7 +14,7 @@ class OnePorn : MainAPI() {
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer" to "$mainUrl/",
-        "Accept-Language" to "en-US,en;q=0.9"
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -30,14 +30,15 @@ class OnePorn : MainAPI() {
             Triple("Bangbros", "$mainUrl/networks/bangbros-com/", "network"),
             Triple("Reality Kings", "$mainUrl/networks/realitykings-com/", "network"),
             Triple("Adult Time", "$mainUrl/networks/adult-time/", "network"),
-            Triple("Naughty America", "$mainUrl/networks/naughtyamerica-com/", "network")
+            Triple("Naughty America", "$mainUrl/networks/naughtyamerica-com/", "network"),
+            Triple("Private", "$mainUrl/networks/private/", "network")
         )
 
         val homePageList = sections.mapNotNull { (name, url, _) ->
             val pageUrl = if (page <= 1) url else "${url.trimEnd('/')}/$page/"
             try {
                 val response = app.get(pageUrl, headers = headers).document
-                val videos = response.select("div.item, div.video-item, article.item").mapNotNull {
+                val videos = response.select("div.item, div.video-item, article.item, .thumb-block").mapNotNull {
                     it.toSearchResult()
                 }
                 if (videos.isNotEmpty()) HomePageList(name, videos.take(20)) else null
@@ -52,7 +53,7 @@ class OnePorn : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val searchUrl = "$mainUrl/search/${query.replace(" ", "+")}/relevance/"
         val doc = app.get(searchUrl, headers = headers).document
-        return doc.select("div.item, div.video-item, article.item").mapNotNull { it.toSearchResult() }
+        return doc.select("div.item, div.video-item, article.item, .thumb-block").mapNotNull { it.toSearchResult() }
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -101,35 +102,58 @@ class OnePorn : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val response = app.get(data, headers = headers)
-        val html = response.text
-
-        // Regex لاستخراج الروابط بكل الجودات
-        val generalMp4Regex = """https?://[^"\s]+ahcdn\.com[^"\s]*\.mp4[^"\s]*""".toRegex()
+        val doc = app.get(data, headers = headers).document
+        val html = doc.html()
         val foundLinks = mutableSetOf<String>()
 
-        generalMp4Regex.findAll(html).forEach { match ->
-            val link = match.value
-            if (foundLinks.add(link)) {
-                val quality = when {
-                    link.contains("2160") || link.contains("4k") -> 2160
-                    link.contains("1080") -> 1080
-                    link.contains("720") -> 720
-                    else -> 480
-                }
-                callback(
-                    newExtractorLink(
-                        source = "1porn",
-                        name = "1porn ${quality}p",
-                        url = link,
-                    ) {
-                        this.quality = quality
-                        this.referer = mainUrl
-                    }
-                )
-            }
+        val mp4Regex = """https?://[^"\s]+ahcdn\.com[^"\s]*\.mp4[^"\s]*""".toRegex()
+        val scriptRegex = """(?:video_url|file|source|video_src)\s*[:=]\s*['"](https?://[^'"]+)['"]""".toRegex()
+
+        // 1. روابط الصفحة الرئيسية
+        mp4Regex.findAll(html).forEach { match ->
+            addLink(match.value, foundLinks, callback)
         }
         
-        return true
+        scriptRegex.findAll(html).forEach { match ->
+            addLink(match.groupValues[1], foundLinks, callback)
+        }
+
+        // 2. البحث في الـ Iframes
+        doc.select("iframe").map { it.attr("src") }.filter { it.isNotBlank() }.forEach { iframeUrl ->
+            try {
+                val iframeHtml = app.get(fixUrl(iframeUrl), headers = headers).text
+                mp4Regex.findAll(iframeHtml).forEach { match ->
+                    addLink(match.value, foundLinks, callback)
+                }
+                scriptRegex.findAll(iframeHtml).forEach { match ->
+                    addLink(match.groupValues[1], foundLinks, callback)
+                }
+            } catch (e: Exception) { }
+        }
+
+        return foundLinks.isNotEmpty()
+    }
+
+    private suspend fun addLink(link: String, foundLinks: MutableSet<String>, callback: (ExtractorLink) -> Unit) {
+        if (link.isBlank() || !foundLinks.add(link)) return
+        if (!link.contains("ahcdn.com") && !link.contains(".mp4") && !link.contains(".m3u8")) return
+
+        val quality = when {
+            link.contains("2160") || link.contains("4k") -> 2160
+            link.contains("1080") -> 1080
+            link.contains("720") -> 720
+            else -> 480
+        }
+        
+        callback(
+            newExtractorLink(
+                source = "1porn",
+                name = "1porn ${quality}p",
+                url = link,
+            ) {
+                this.quality = quality
+                this.referer = mainUrl
+            }
+        )
     }
 }
