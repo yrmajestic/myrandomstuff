@@ -102,46 +102,44 @@ class OnePorn : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data, headers = headers).document
-        val html = doc.html()
+        val response = app.get(data, headers = headers)
+        val html = response.text
         val foundLinks = mutableSetOf<String>()
 
-        val mp4Regex = """https?://[^"\s]+ahcdn\.com[^"\s]*\.mp4[^"\s]*""".toRegex()
-        val scriptRegex = """(?:video_url|file|source|video_src)\s*[:=]\s*['"](https?://[^'"]+)['"]""".toRegex()
+        // فك تشفير المائلات العكسية والرموز
+        val cleanHtml = html.replace("\\/", "/").replace("\\\"", "\"")
 
-        // 1. روابط الصفحة الرئيسية
-        mp4Regex.findAll(html).forEach { match ->
+        val linkRegex = """https?://[^\s"'<>]+ahcdn\.com[^\s"'<>]+(?:\.mp4|\.m3u8)[^\s"'<>]*""".toRegex()
+        val genericRegex = """https?://[^\s"'<>]+(?:\.mp4|\.m3u8)[^\s"'<>]*""".toRegex()
+
+        (linkRegex.findAll(cleanHtml) + genericRegex.findAll(cleanHtml)).forEach { match ->
             addLink(match.value, foundLinks, callback)
         }
-        
-        scriptRegex.findAll(html).forEach { match ->
-            addLink(match.groupValues[1], foundLinks, callback)
-        }
 
-        // 2. البحث في الـ Iframes
-        doc.select("iframe").map { it.attr("src") }.filter { it.isNotBlank() }.forEach { iframeUrl ->
-            try {
-                val iframeHtml = app.get(fixUrl(iframeUrl), headers = headers).text
-                mp4Regex.findAll(iframeHtml).forEach { match ->
-                    addLink(match.value, foundLinks, callback)
-                }
-                scriptRegex.findAll(iframeHtml).forEach { match ->
-                    addLink(match.groupValues[1], foundLinks, callback)
-                }
-            } catch (e: Exception) { }
+        // البحث عن روابط داخل الـ iframes
+        response.document.select("iframe").forEach { iframe ->
+            val iframeUrl = iframe.attr("src")
+            if (iframeUrl.isNotBlank()) {
+                try {
+                    val iframeHtml = app.get(fixUrl(iframeUrl), headers = headers).text
+                    linkRegex.findAll(iframeHtml.replace("\\/", "/")).forEach { match ->
+                        addLink(match.value, foundLinks, callback)
+                    }
+                } catch (e: Exception) { }
+            }
         }
 
         return foundLinks.isNotEmpty()
     }
 
     private suspend fun addLink(link: String, foundLinks: MutableSet<String>, callback: (ExtractorLink) -> Unit) {
-        if (link.isBlank() || !foundLinks.add(link)) return
-        if (!link.contains("ahcdn.com") && !link.contains(".mp4") && !link.contains(".m3u8")) return
+        val cleanLink = link.substringBefore("\"").substringBefore("'").substringBefore(">")
+        if (cleanLink.isBlank() || !foundLinks.add(cleanLink)) return
 
         val quality = when {
-            link.contains("2160") || link.contains("4k") -> 2160
-            link.contains("1080") -> 1080
-            link.contains("720") -> 720
+            cleanLink.contains("2160") || cleanLink.contains("4k") -> 2160
+            cleanLink.contains("1080") -> 1080
+            cleanLink.contains("720") -> 720
             else -> 480
         }
         
@@ -149,7 +147,7 @@ class OnePorn : MainAPI() {
             newExtractorLink(
                 source = "1porn",
                 name = "1porn ${quality}p",
-                url = link,
+                url = cleanLink,
             ) {
                 this.quality = quality
                 this.referer = mainUrl
