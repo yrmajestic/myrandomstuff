@@ -30,6 +30,8 @@ class OnePorn : MainAPI() {
             Triple("Bangbros", "$mainUrl/networks/bangbros-com/", "network"),
             Triple("Reality Kings", "$mainUrl/networks/realitykings-com/", "network"),
             Triple("Adult Time", "$mainUrl/networks/adult-time/", "network"),
+            Triple("FakeHub", "$mainUrl/networks/fakehub-com/", "network"),
+            Triple("Woodman Casting", "$mainUrl/networks/woodmancastingx-com/", "network"),
             Triple("Naughty America", "$mainUrl/networks/naughtyamerica-com/", "network"),
             Triple("Private", "$mainUrl/networks/private/", "network")
         )
@@ -41,7 +43,7 @@ class OnePorn : MainAPI() {
                 val videos = response.select("div.item, div.video-item, article.item, .thumb-block").mapNotNull {
                     it.toSearchResult()
                 }
-                if (videos.isNotEmpty()) HomePageList(name, videos.take(20)) else null
+                if (videos.isNotEmpty()) HomePageList(name, videos) else null
             } catch (e: Exception) {
                 null
             }
@@ -54,6 +56,18 @@ class OnePorn : MainAPI() {
         val searchUrl = "$mainUrl/search/${query.replace(" ", "+")}/relevance/"
         val doc = app.get(searchUrl, headers = headers).document
         return doc.select("div.item, div.video-item, article.item, .thumb-block").mapNotNull { it.toSearchResult() }
+    }
+
+    // تصحيح نوع البيانات ليدعم التمرير في البحث
+    override suspend fun search(query: String, page: Int): SearchResponseList? {
+        val searchUrl = if (page <= 1) {
+            "$mainUrl/search/${query.replace(" ", "+")}/relevance/"
+        } else {
+            "$mainUrl/search/${query.replace(" ", "+")}/relevance/$page/"
+        }
+        val doc = app.get(searchUrl, headers = headers).document
+        val results = doc.select("div.item, div.video-item, article.item, .thumb-block").mapNotNull { it.toSearchResult() }
+        return if (results.isEmpty()) null else newSearchResponseList(results)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -106,7 +120,6 @@ class OnePorn : MainAPI() {
         val html = response.text
         val foundLinks = mutableSetOf<String>()
 
-        // فك تشفير المائلات العكسية والرموز
         val cleanHtml = html.replace("\\/", "/").replace("\\\"", "\"")
 
         val linkRegex = """https?://[^\s"'<>]+ahcdn\.com[^\s"'<>]+(?:\.mp4|\.m3u8)[^\s"'<>]*""".toRegex()
@@ -116,7 +129,6 @@ class OnePorn : MainAPI() {
             addLink(match.value, foundLinks, callback)
         }
 
-        // البحث عن روابط داخل الـ iframes
         response.document.select("iframe").forEach { iframe ->
             val iframeUrl = iframe.attr("src")
             if (iframeUrl.isNotBlank()) {
