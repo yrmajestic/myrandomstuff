@@ -1,9 +1,9 @@
 [
     {
-        "fileHash": "sha256-4bcbb53f0299356c4c8b8726fe729c80abd52c61145b7157f64896b343a3e0d1",
+        "fileHash": "sha256-64cc6ed5245ec531ec7c5a3ced4433f63bf27fd1a6fdffaa3ba53a8f77776c03",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/yrmajestic/myrandomstuff",
-        "fileSize": 17665,
+        "fileSize": 16649,
         "status": 1,
         "authors": [
             "YourName"
